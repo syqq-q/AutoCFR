@@ -445,6 +445,80 @@ class DCFRBuilder(CFRBuilder):
         return forward_programs
 
 
+class DCFRPlusBuilder(CFRBuilder):
+    def _build_cumulative_regret_programs(self):
+        ins_regret = self.program_input_variables.get_input_variable_by_name(
+            "ins_regret"
+        )
+        cumu_regret = self.program_input_variables.get_input_variable_by_name(
+            "cumu_regret"
+        )
+        iters = self.program_input_variables.get_input_variable_by_name("iters")
+        zero = self.program_constants_variables.get_constant_variable_by_value(0)
+        one = self.program_constants_variables.get_constant_variable_by_value(1)
+        c1d5 = self.program_constants_variables.get_constant_variable_by_value(1.5)
+        three = self.program_constants_variables.get_constant_variable_by_value(3)
+        sub_op = operations.Subtract(iters, one)
+        pow_op = operations.Pow(sub_op, c1d5)
+        add_op = operations.Add(pow_op, c1d5)
+        div_op = operations.Div(pow_op, add_op)
+        mul_op = operations.Multiply(cumu_regret, div_op)
+        add_op_2 = operations.Add(mul_op, ins_regret)
+        max_op = operations.Max(add_op_2, zero)
+        forward_programs = [
+            sub_op,
+            pow_op,
+            add_op,
+            div_op,
+            mul_op,
+            add_op_2,
+            max_op     
+        ]
+        return forward_programs
+    def _build_cumulative_strategy_programs(self):
+        strategy_variable = self.program_input_variables.get_input_variable_by_name(
+            "strategy"
+        )
+        reach_variable = self.program_input_variables.get_input_variable_by_name(
+            "reach_prob"
+        )
+        cumu_strategy = self.program_input_variables.get_input_variable_by_name(
+            "cumu_strategy"
+        )
+        iters = self.program_input_variables.get_input_variable_by_name("iters")
+        one = self.program_constants_variables.get_constant_variable_by_value(1)
+        three = self.program_constants_variables.get_constant_variable_by_value(3)
+        sub_op = operations.Subtract(iters, one)
+        div_op = operations.Div(sub_op, iters)
+        mul_op = operations.Multiply(cumu_strategy, div_op)
+        pow_op = operations.Pow(iters, three)
+        mul_op_2 = operations.Multiply(reach_variable, pow_op)
+        mul_op_3 = operations.Multiply(mul_op_2, strategy_variable)
+        add_op = operations.Add(mul_op, mul_op_3)
+        forward_programs = [
+            sub_op,
+            div_op,
+            mul_op,
+            pow_op,
+            mul_op_2,
+            mul_op_3,
+            add_op
+        ]
+        return forward_programs
+
+
+# class AutoCFR4Builder(CFRBuilder):
+#     def _build_cumulative_regret_programs(self):
+#         ins_regret = self.program_input_variables.get_input_variable_by_name(
+#             "ins_regret"
+#         )
+#         cumu_regret = self.program_input_variables.get_input_variable_by_name(
+#             "cumu_regret"
+#         )
+#         iters = self.program_input_variables.get_input_variable_by_name("iters")
+
+
+
 def load_algorithm(algorithm_name, visualize=False):
     build_dict = {
         "cfr": CFRBuilder,
@@ -454,6 +528,9 @@ def load_algorithm(algorithm_name, visualize=False):
         "cfr_error": CFRErrorBuilder,
         "cfr_same": CFRSameBuilder,
         "empty": CFREmptyBuilder,
+        "dcfr_plus": DCFRPlusBuilder,
+        # "autocfr4": AutoCFR4Builder,
+        # "autocfrs": AutoCFRSBuilder
     }
     if algorithm_name not in build_dict:
         raise Exception("Do not support algorithm: {}".format(algorithm_name))

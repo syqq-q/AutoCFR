@@ -164,6 +164,8 @@ class VecWorker:
         if not self.task_finished_queue.empty():
             result = self.task_finished_queue.get()
             self.counter.remove_finished()
+        # print("---------")
+        # print(result)
         return result
 
     def execute_tasks(self, tasks):

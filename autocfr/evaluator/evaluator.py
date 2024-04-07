@@ -6,9 +6,16 @@ from open_spiel.python import policy
 
 from autocfr.worker import Worker, VecWorker, GroupVecWorker
 from autocfr.cfr.cfr_solver import CFRSolver
+from autocfr.cfr.cfr_solver_hunl import CFRHunlSolver
+from autocfr.cfr.conservative import ConservativeSolver
+from autocfr.cfr.radical import RadicalSolver
 from autocfr.utils import load_game
+from PokerRL.game import bet_sets
+from PokerRL.game.games import DiscretizedNLHoldemSubGame3, DiscretizedNLHoldemSubGame4
+from PokerRL.rl.base_cls.workers.ChiefBase import ChiefBase
 
 
+#均衡计算
 def compute_conv(game, solver, exp_lower_limit=1e-12):
     conv = exploitability.exploitability(
         game,
@@ -29,10 +36,33 @@ def evaluate_algorithm_run(
     conv_records = {}
     game = load_game(game_config)
     solver = CFRSolver(game, algorithm)
+
+    # ----CFRHunlSolver----
+    # chief = ChiefBase(t_prof=None)
+    # game_name = game_config["subgame_name"]
+    # name = "{}_{}".format(algorithm, game_name)
+    # solver = CFRHunlSolver(
+    #     name=name,
+    #     algorithm=algorithm,
+    #     game_cls=game_config[game_name],
+    #     agent_bet_set=bet_sets.B_3,
+    #     other_agent_bet_set=bet_sets.B_2,
+    #     chief_handle=chief
+    #     )
+
+    # -----ConservativeSolver-----
+    # game = load_game(game_config)
+    # solver = ConservativeSolver(game, algorithm)
+
+    # -----RadicalSolver-----
+    # game = load_game(game_config)
+    # solver = RadicalSolver(game, algorithm)
+
     for iters in range(game_config["iterations"]):
         solver.iteration()
         if return_conv_records and iters % conv_records_interval == 0:
             conv = compute_conv(game, solver, exp_lower_limit)
+            # conv = max(exp_lower_limit, solver.expl / 1000)
             conv_records[iters] = conv
             if verbose:
                 print(
@@ -41,6 +71,7 @@ def evaluate_algorithm_run(
                     )
                 )
     conv = compute_conv(game, solver, exp_lower_limit)
+    # conv = max(exp_lower_limit, solver.expl / 1000)
     return conv, conv_records
 
 
@@ -87,6 +118,7 @@ class Evaluator(Worker):
 
     def run(self, task):
         game_config = task["game_config"]
+        print("game_config:", game_config)
         algorithm = task["algorithm"]
         agent_index = task["agent_index"]
         evaluate_result = evaluate_algorithm(
@@ -176,14 +208,14 @@ class GroupVecEvaluator(GroupVecWorker):
         }
         super().__init__(num_evaluators, EvaluatorContainer, **kwargs)
 
-    def eval_algorithm_parallel(self, agent_index, algorithm, game_configs):
+    def eval_algorithm_parallel(self, agent_index, algorithm, game_config):
 
         tasks = []
-        for game_config in game_configs:
-            task = dict(
-                agent_index=agent_index, algorithm=algorithm, game_config=game_config
-            )
-            tasks.append(task)
+        # for game_config in game_configs:
+        task = dict(
+            agent_index=agent_index, algorithm=algorithm, game_config=game_config
+        )
+        tasks.append(task)
         self.add_tasks(tasks)
 
     def get_evaluating_result(self):

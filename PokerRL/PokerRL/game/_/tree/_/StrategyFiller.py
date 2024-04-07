@@ -48,6 +48,7 @@ class StrategyFiller:
     def _fill_uniform_random(self, node):
         if node is not self._tree.root and node.p_id_acted_last is not self._tree.CHANCE_ID:
             assert node.parent.strategy.shape == (self._env_bldr.rules.RANGE_SIZE, len(node.parent.children),)
+            assert node.parent.avg_strat_sum.shape == node.parent.strategy.shape
             assert np.all(np.abs(np.sum(node.parent.strategy, axis=1) - 1) < 0.001)
 
         if node.is_terminal:
@@ -60,6 +61,8 @@ class StrategyFiller:
             n_actions = len(node.children)
             node.strategy = np.full(shape=(self._env_bldr.rules.RANGE_SIZE, n_actions),
                                     fill_value=1.0 / float(n_actions))
+            node.avg_strat_sum = np.copy(node.strategy)
+            #print("avg_strat_sum:", node.data["avg_strat_sum"])
 
         for c in node.children:
             self._fill_uniform_random(node=c)

@@ -33,15 +33,17 @@ class Evolution:
         while True:
             time.sleep(0.01)
 
-            if self.generator_free():
-                parent_A = self.population.compete()
-                parent_B = self.population.compete()
-                self.join_generating_queue(parent_A, parent_B)
+            # if self.generator_free():
+            for game_index in range(2):
+                if self.generator_free():
+                    parent_A = self.population[game_index].compete()
+                    parent_B = self.population[game_index].compete()
+                    self.join_generating_queue(parent_A, parent_B, game_index)
 
             agents = self.fetch_generating_result()
 
             for agent in agents:
-                agent_evaluted = self.population.check_func_equal_previous_agents(agent)
+                agent_evaluted = self.population[agent.game_index].check_func_equal_previous_agents(agent)
                 if agent_evaluted:
                     self.copy_score_and_join_popu_direct(agent)
                 else:
@@ -52,8 +54,8 @@ class Evolution:
 
             self.fetch_evaluating_result()
 
-            if agents:
-                self.logger_status()
+            # if agents:
+            #     self.logger_status()
 
     def generator_free(self):
         generator_state = self.generator.state()
@@ -66,17 +68,18 @@ class Evolution:
     def drop_agent(self):
         self.agent_counter.generaing_to_drop()
 
-    def join_generating_queue(self, parent_A, parent_B):
+    def join_generating_queue(self, parent_A, parent_B, game_index):
         self.generator.gen_agent_infos(
-            parent_A.algorithm, parent_B.algorithm, self.population.early_hurdle_threshold
+            parent_A.algorithm, parent_B.algorithm, self.population[game_index].early_hurdle_threshold, game_index
         )
 
     def fetch_generating_result(self):
-        agent_infos = self.generator.get_agent_infos()
+        agent_infos, game_index = self.generator.get_agent_infos_and_game_index()
         agents = []
         for agent_info in agent_infos:
             agent = Agent(
-                agent_info["algorithm"],
+                algorithm=agent_info["algorithm"],
+                game_index=game_index,
                 hash_code=agent_info["hash_code"],
                 early_hurdle_score=agent_info["early_hurdle_score"],
             )
@@ -87,18 +90,21 @@ class Evolution:
         return agents
 
     def copy_score_and_join_popu_direct(self, agent):
-        func_equal_agent = self.population.get_func_equal_agent(agent)
+        func_equal_agent = self.population[agent.game_index].get_func_equal_agent(agent)
         assert func_equal_agent.hash_code == agent.hash_code
         assert (
             abs(func_equal_agent.early_hurdle_score - agent.early_hurdle_score) < 1e-6
         )
         agent.copy_score(func_equal_agent)
-        self.population.add_agent(agent)
+        self.population[agent.game_index].add_agent(agent)
         self.agent_counter.generating_to_func_equv()
 
     def join_evaluating_queue(self, agent):
+        for game_config in self.game_configs:
+            if agent.game_index == game_config["game_index"]:
+                config = game_config
         self.evaluator.eval_algorithm_parallel(
-            agent.index, agent.algorithm, self.game_configs
+            agent.index, agent.algorithm, config
         )
         self.agent_counter.generaing_to_evaluating()
 
@@ -114,41 +120,54 @@ class Evolution:
 
     @ex.capture
     def process_evaluate_succ_result(self, results, agent_save_freq):
+        # print("-------")
+        # print(results)
         for result in results:
             agent_index = result["agent_index"]
-            agent = Agent.get_agent(agent_index)
+            game_index = result["game_config"]["game_index"]
+            agent = Agent.get_agent(agent_index, game_index)
+            game_name = result["game_config"]["name"]
             self.set_agent_score_from_result(agent, result)
         self.agent_counter.evaluating_to_succ()
-        self.population.add_agent(agent)
+        self.population[agent.game_index].add_agent(agent)
         score = agent.ave_score
-        max_score = self.population.max_score
-        self.writer.add_scalar("max_score_by_succ", max_score, self.agent_counter.succ)
-        self.file_logger.log_scalar("max_score_by_succ", max_score, self.agent_counter.succ)
-        self.writer.add_scalar("max_score_by_eval", max_score, self.agent_counter.succ + self.agent_counter.fail)
-        self.file_logger.log_scalar("max_score_by_eval", max_score, self.agent_counter.succ + self.agent_counter.fail)
+        max_score = self.population[agent.game_index].max_score
+        writer = self.writer1
+        if agent.game_index == 1:
+            writer = self.writer2
+        writer.add_scalar("max_score_by_succ", max_score, self.agent_counter.succ)
+        self.file_logger.log_scalar("max_score_by_succ_of_game{}".format(agent.game_index), max_score, self.agent_counter.succ)
+        writer.add_scalar("max_score_by_eval", max_score, self.agent_counter.succ + self.agent_counter.fail)
+        self.file_logger.log_scalar("max_score_by_eval_of_game{}".format(agent.game_index), max_score, self.agent_counter.succ + self.agent_counter.fail)
         if self.agent_counter.succ % agent_save_freq == 0:
-            agent.save()
+            agent.save(game_name=game_name)
         round_score = round(agent.ave_score, 3)
         if round_score not in self.scores:
-            self.writer.add_scalar("new_ave_score", score, agent_index)
-            self.file_logger.log_scalar("new_ave_score", score, agent_index)
+            writer.add_scalar("new_ave_score", score, agent_index)
+            self.file_logger.log_scalar("new_ave_score_of_game{}".format(agent.game_index), score, agent_index)
             self.scores.add(round_score)
-            agent.save(prefix="valid")
+            agent.save(prefix="valid", game_name=game_name)
 
     def process_evaluate_fail_result(self, result):
+        print("result:", result)
         agent_index = result["agent_index"]
         game_config = result["game_config"]
+        game_index = game_config["game_index"]
+        game_name = game_config["name"]
         info = result["info"]
         traceback = result["traceback"]
-        agent = Agent.get_agent(agent_index)
+        agent = Agent.get_agent(agent_index, game_index)
         self.agent_counter.evaluating_to_fail()
-        agent.save(prefix="fail")
-        max_score = self.population.max_score
-        self.writer.add_scalar("max_score_by_eval", max_score, self.agent_counter.succ + self.agent_counter.fail)
-        self.file_logger.log_scalar("max_score_by_eval", max_score, self.agent_counter.succ + self.agent_counter.fail)
+        agent.save(prefix="fail", game_name=game_name)
+        max_score = self.population[agent.game_index].max_score
+        writer = self.writer1
+        if agent.game_index == 1:
+            writer = self.writer2
+        writer.add_scalar("max_score_by_eval", max_score, self.agent_counter.succ + self.agent_counter.fail)
+        self.file_logger.log_scalar("max_score_by_eval_of_game{}".format(agent.game_index), max_score, self.agent_counter.succ + self.agent_counter.fail)
         self.logger.warning(
-            "Program {} evaluation exception, program name: {}, error info: {}\n{}".format(
-                agent_index, game_config["name"], info, str(traceback)
+            "Program {}_{} evaluation exception, program name: {}, error info: {}\n{}".format(
+                agent_index, game_index, game_config["name"], info, str(traceback)
             )
         )
 
@@ -227,21 +246,26 @@ class Evolution:
         agents = []
         for init_algorithm_file in init_algorithms_file:
             algorithm = CFRAlgorithm.load(init_algorithm_file)
-            agent = Agent(algorithm)
-            agents.append(agent)
+            for game_index in range(2):
+                agent = Agent(algorithm=algorithm, game_index=game_index)
+                agents.append(agent)
 
         self.evaluate_agents_parallel(agents)
 
         # add agent to population
-        self.population = Population(self.population_size, self.tournament_size)
+        self.population = []
+        for game_index in range(2):
+            # self.population[game_index] = Population(self.population_size, self.tournament_size)
+            self.population.append(Population(self.population_size, self.tournament_size))
         for agent in agents:
-            self.population.add_agent(agent)
+            self.population[agent.game_index].add_agent(agent)
             self.logger.info(
                 "Algorithm length: {} ave_score: {}".format(
                     len(agent.algorithm), agent.ave_score
                 )
             )
-        self.save_population()
+        for game_index in range(2):
+            self.save_population(game_index)
         self.logger.info("Finish reading and evaluating agents.")
 
     def evaluate_agents_parallel(self, agents):
@@ -251,6 +275,7 @@ class Evolution:
         for game_config in self.game_configs:
             for agent in agents:
                 task = dict(
+                    game_index=agent.game_index,
                     agent_index=agent.index,
                     algorithm=agent.algorithm,
                     game_config=game_config,
@@ -261,7 +286,8 @@ class Evolution:
 
         for result in results:
             agent_index = result["agent_index"]
-            agent = Agent.get_agent(agent_index)
+            game_index = result["game_config"]["game_index"]
+            agent = Agent.get_agent(agent_index, game_index)
             self.set_agent_score_from_result(agent, result, verbose=True)
 
         del evaluator
@@ -269,8 +295,10 @@ class Evolution:
     @ex.capture
     def init_tensorboard(self, _run):
         run_id = _run._id if _run is not None else "test"
-        dir_name = Path(__file__).parent.parent / "logs" / str(run_id)
-        self.writer = SummaryWriter(dir_name)
+        dir_name1 = Path(__file__).parent.parent / "logs" / str(run_id)/ "game_0"
+        dir_name2 = Path(__file__).parent.parent / "logs" / str(run_id)/ "game_1"
+        self.writer1 = SummaryWriter(dir_name1)
+        self.writer2 = SummaryWriter(dir_name2)
 
     @ex.capture
     def init_remote_actor(self, num_evaluators, num_generators):
@@ -280,24 +308,28 @@ class Evolution:
         self.num_evaluators = num_evaluators
 
     @ex.capture
-    def save_population(self, _run=None):
+    def save_population(self, game_index, _run=None):
         run_id = _run._id if _run is not None else "test"
         file = (
             Path(__file__).parent.parent
-            / "logs"
+            / "logs" 
             / str(run_id)
             / "models"
+            / "game_{}".format(game_index)
             / "models.pkl"
         )
         file.parent.mkdir(parents=True, exist_ok=True)
-        Population.save(self.population, str(file))
+        for game_index in range(2):
+            Population.save(self.population[game_index], str(file))
 
     def set_agent_score_from_result(self, agent, result, verbose=False):
+        # print("result:", result)
         conv = result["conv"]
         game_config = result["game_config"]
         game_name = game_config["name"]
         score = standing.score(conv, game_config)
-        agent.set_score(game_name, score, game_config["weight"])
+        # agent.set_score(game_name, score, game_config["weight"])
+        agent.set_score(game_name, score)
         if verbose:
             self.logger.info(
                 "Agent {} obtain score {} in Game {}".format(

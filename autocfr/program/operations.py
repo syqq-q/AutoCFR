@@ -109,6 +109,9 @@ class Multiply(Operation):
     commutative = True
 
     def execute(self, input_values):
+        # print("-----------")
+        # print("input_values[0]:", input_values[0])
+        # print("\ninput_values[1]:", input_values[1])
         return input_values[0] * input_values[1]
 
     @classmethod
@@ -214,12 +217,22 @@ class Normalize(Operation):
 
     def execute(self, input_values):
         vec = input_values[0]
-        size = vec.shape[0]
+        size = vec.shape
+        #print("\nsize of vec is:", size)
+        # N = size[1]
+        # p_sum = np.expand_dims(np.sum(vec, axis=1), axis=1).repeat(N, axis=1)
         p_sum = np.sum(vec)
         if p_sum == 0:
             vec = np.ones(size, dtype=program_types.nptype) / size
         else:
             vec = vec / p_sum
+        # with np.errstate(divide='ignore', invalid='ignore'):
+        #     res = np.where(
+        #         p_sum > 0.0,
+        #         vec / p_sum,
+        #         np.full(shape=size, fill_value=1.0/N, dtype=np.float32)
+        #     )
+        #print("\nres:", res)
         return vec
 
     @classmethod

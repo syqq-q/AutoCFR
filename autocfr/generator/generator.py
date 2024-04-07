@@ -15,7 +15,7 @@ class Generator(Worker):
         check_program=True,
         programs_max_length=[12, 12, 12],
         crossover_prob=0.1,
-        early_hurdle=True,
+        early_hurdle=False,
         early_hurdle_iters=100,
     ):
         super().__init__(index)
@@ -29,6 +29,7 @@ class Generator(Worker):
         parent_algorithm_A = task["parent_algorithm_A"]
         parent_algorithm_B = task["parent_algorithm_B"]
         self.early_hurdle_threshold = task["early_hurdle_threshold"]
+        game_index = task["game_index"]
         self.check_fail = 0
         self.early_hurdle_count = 0
         agent_infos = []
@@ -44,6 +45,9 @@ class Generator(Worker):
                 break
         result = self.get_result_dict(task)
         result["agent_infos"] = agent_infos
+        result["game_index"] = game_index
+        # print("--------generator result-----------")
+        # print("result:", result)
         return result
 
     def cross_algorithms(self, parent_algorithm_A, parent_algorithm_B):
@@ -95,7 +99,7 @@ class VecGenerator(VecWorker):
         check_program=True,
         programs_max_length=[12, 12, 12],
         crossover_prob=0.1,
-        early_hurdle=True,
+        early_hurdle=False,
         early_hurdle_iters=100,
     ):
         kwargs = {
@@ -107,18 +111,21 @@ class VecGenerator(VecWorker):
         }
         super().__init__(num_generators, Generator, **kwargs)
 
-    def gen_agent_infos(self, parent_algorithm_A, parent_algorithm_B, early_hurdle_threshold):
+    def gen_agent_infos(self, parent_algorithm_A, parent_algorithm_B, early_hurdle_threshold, game_index):
         task = dict(
             parent_algorithm_A=parent_algorithm_A,
             parent_algorithm_B=parent_algorithm_B,
-            early_hurdle_threshold=early_hurdle_threshold
+            early_hurdle_threshold=early_hurdle_threshold,
+            game_index=game_index
         )
         self.add_task(task)
 
-    def get_agent_infos(self):
+    def get_agent_infos_and_game_index(self):
         result = self.get_result()
         if result is not None:
             agent_infos = result["agent_infos"]
+            game_index = result["game_index"]
         else:
             agent_infos = []
-        return agent_infos
+            game_index = None
+        return agent_infos, game_index

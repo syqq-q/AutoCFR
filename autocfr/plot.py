@@ -120,7 +120,7 @@ class PlotAlgorithmCompare:
             "CFRPlus": "CFR+",
             "LinearCFR": "Linear CFR",
             "DCFR": "DCFR",
-            "DCFRPlus": "DCFR+",
+            "": "DCFR+",
             "AutoCFR4": "AutoCFR4",
             "AutoCFRS": "AutoCFRS",
         }

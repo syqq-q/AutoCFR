@@ -3,6 +3,8 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 from autocfr.cfr.cfr_solver import CFRSolver
+from autocfr.cfr.conservative import ConservativeSolver
+from autocfr.cfr.radical import RadicalSolver
 from open_spiel.python import policy
 from open_spiel.python.algorithms import exploitability
 from autocfr.utils import load_game, load_module, save_df
@@ -21,20 +23,24 @@ class AlgorithmEvaluator:
         self.verbose = verbose
 
     def evaluate(self):
-        pool = multiprocessing.Pool(len(self.game_configs))
+        # pool = multiprocessing.Pool(len(self.game_configs))
+        # for game_config in self.game_configs:
+        #     pool.apply_async(
+        #         self.evaluate_run,
+        #         args=(game_config, self.algorithm, self.algo_name),
+        #         callback=self.record,
+        #     )
+        # pool.close()
+        # pool.join()
         for game_config in self.game_configs:
-            pool.apply_async(
-                self.evaluate_run,
-                args=(game_config, self.algorithm, self.algo_name),
-                callback=self.record,
-            )
-        pool.close()
-        pool.join()
+            self.evaluate_run(game_config, self.algorithm, self.algo_name)
+
+        # self.evaluate_run(self.game_configs, self.algorithm, self.algo_name)
 
     def evaluate_run(self, game_config, algorithm, algo_name):
         game_name = game_config["long_name"]
         game = load_game(game_config)
-        solver = CFRSolver(game, algorithm)
+        solver = ConservativeSolver(game, algorithm)
         conv = self.calc_conv(game, solver)
         steps = [0]
         convs = [conv]

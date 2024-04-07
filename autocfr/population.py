@@ -11,24 +11,36 @@ from autocfr.generator.early_hurdle import early_hurdle
 
 
 class Agent:
-    total_index = 0
-    agent_dict = {}
+    total_index = [0, 0]
+    agent_dict_0 = {}
+    agent_dict_1 = {}
+    dict_name = {0: agent_dict_0, 1: agent_dict_1}
+    # agent_dict_2 = {}
+    # agent_dict_3 = {}
+    # agent_dict_4 = {}
 
     @classmethod
-    def get_agent(cls, agent_index):
-        if agent_index not in cls.agent_dict:
-            raise Exception("No Agent {}".format(agent_index))
-        return cls.agent_dict[agent_index]
+    def get_agent(cls, agent_index, game_index):
+        # print("total_index:", cls.total_index)
+        # print("agent_dict_0:", cls.agent_dict_0)
+        # print("agent_dict_1:", cls.agent_dict_1)
+        if agent_index not in cls.dict_name[game_index]:
+            raise Exception("No Agent {} in game {}".format(agent_index, game_index))
+        # return cls.agent_dict[agent_index]
+        return cls.dict_name[game_index][agent_index]
 
-    def __init__(self, algorithm, hash_code=None, early_hurdle_score=None):
-        self.index = Agent.total_index
-        Agent.agent_dict[Agent.total_index] = self
-        Agent.total_index += 1
+    def __init__(self, algorithm, game_index, hash_code=None, early_hurdle_score=None):
+        self.index = Agent.total_index[game_index]
+        # Agent.agent_dict[Agent.total_index] = self
+        # Agent.total_index += 1
+        Agent.dict_name[game_index][Agent.total_index[game_index]] = self
+        Agent.total_index[game_index] += 1
+        self.game_index = game_index
         self.algorithm = algorithm
         self.hash_code = hash_code
         self.early_hurdle_score = early_hurdle_score
         self.scores = {}
-        self.weights = {}
+        # self.weights = {}
 
     def gen_hash_code(self):
         if self.hash_code is None:
@@ -41,11 +53,11 @@ class Agent:
 
     def copy_score(self, other_agent):
         self.scores = copy.deepcopy(other_agent.scores)
-        self.weights = copy.deepcopy(other_agent.weights)
+        # self.weights = copy.deepcopy(other_agent.weights)
 
-    def set_score(self, env_name, score, weight):
+    def set_score(self, env_name, score):
         self.scores[env_name] = score
-        self.weights[env_name] = weight
+        # self.weights[env_name] = weight
 
     @property
     def ave_score(self):
@@ -54,9 +66,10 @@ class Agent:
         total_score = 0
         total_weight = 0
         for env_name, score in self.scores.items():
-            weight = self.weights[env_name]
-            total_score += score * weight
-            total_weight += weight
+            # weight = self.weights[env_name]
+            # total_score += score * weight
+            total_score += score
+            total_weight += 1
         score = total_score / total_weight
         return score
 
@@ -64,7 +77,7 @@ class Agent:
         return len(self.scores) > 0
 
     @ex.capture
-    def save(self, _run, prefix=None):
+    def save(self, _run, game_name, prefix=None):
         if prefix:
             prefix += "_"
         else:
@@ -76,6 +89,7 @@ class Agent:
             / "logs"
             / str(run_id)
             / "{}algorithms".format(prefix)
+            /"game_{}".format(game_name)
             / "algorithms_{}.pkl".format(self.index)
         )
         file.parent.mkdir(parents=True, exist_ok=True)
@@ -87,6 +101,7 @@ class Agent:
             / "logs"
             / str(run_id)
             / "{}images".format(prefix)
+            /"game_{}".format(game_name)
             / "images_{}".format(self.index)
         )
         file.parent.mkdir(parents=True, exist_ok=True)

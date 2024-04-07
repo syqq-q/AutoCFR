@@ -1,6 +1,7 @@
 import numpy as np
 from autocfr.vanilla_cfr.cfr_base import CFRSolverBase
 from loguru import logger
+import math
 
 
 class CFRSolver(CFRSolverBase):
@@ -58,15 +59,37 @@ class CFRSolver(CFRSolverBase):
             s.regrets[a] += s.imm_regrets[a]
             s.imm_regrets[a] = 0
 
+    # def update_current_policy(self, s):
+    #     regret_sum = 0
+    #     for regret in s.regrets.values():
+    #         regret_sum += max(0, regret)
+    #     for a, regret in s.regrets.items():
+    #         if regret_sum == 0:
+    #             s.policy[a] = 1 / s.na
+    #         else:
+    #             s.policy[a] = max(0, regret) / regret_sum
+
     def update_current_policy(self, s):
+        tau = 0.25
         regret_sum = 0
+        value_list = [value for value in s.policy.values()]
+        old_policy = np.array(value_list)
+        # print("old_policy:", old_policy)
         for regret in s.regrets.values():
-            regret_sum += max(0, regret)
+            regret_sum += max(0, math.exp(regret / tau))
         for a, regret in s.regrets.items():
             if regret_sum == 0:
                 s.policy[a] = 1 / s.na
             else:
-                s.policy[a] = max(0, regret) / regret_sum
+                s.policy[a] = max(0, math.exp(regret / tau)) / regret_sum
+        value_list = [value for value in s.policy.values()]
+        new_policy = np.array(value_list)
+        # print("new_policy:", new_policy)
+        stable = np.all(np.abs(old_policy - new_policy) < 0.001)
+        print("stable:", stable)
+        if stable:
+            print("old_policy:", old_policy)
+            print("new_policy:", new_policy)
 
     def cumulate_policy(self, s):
         for a, p in s.policy.items():

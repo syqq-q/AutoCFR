@@ -20,20 +20,24 @@ class VanillaEvaluator:
         self.verbose = verbose
 
     def evaluate(self):
-        pool = multiprocessing.Pool(len(self.game_configs) * len(self.algo_names))
+        # pool = multiprocessing.Pool(len(self.game_configs) * len(self.algo_names))
+        # for algo_name in self.algo_names:
+        #     for game_config in self.game_configs:
+        #         pool.apply_async(
+        #             self.evaluate_run,
+        #             args=(game_config, algo_name),
+        #             callback=self.record,
+        #         )
+        # pool.close()
+        # pool.join()
         for algo_name in self.algo_names:
             for game_config in self.game_configs:
-                pool.apply_async(
-                    self.evaluate_run,
-                    args=(game_config, algo_name),
-                    callback=self.record,
-                )
-        pool.close()
-        pool.join()
+                self.evaluate_run(game_config, algo_name)
         if self.df_name is not None:
             save_df(self.df, self.df_name)
 
     def evaluate_run(self, game_config, algo_name):
+        print("game_config:", game_config)
         game_name = game_config["long_name"]
         game = load_game(game_config)
         solver_class = load_module("autocfr.vanilla_cfr:{}Solver".format(algo_name))

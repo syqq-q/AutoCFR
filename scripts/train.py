@@ -10,8 +10,8 @@ def config():
     seed = 0
     population_size = 300
     tournament_size = 25
-    num_evaluators = 20
-    num_generators = 5
+    num_evaluators = 20 #default 20
+    num_generators = 10 #default 5
 
     print_freq = 20  
     save_freq = 1000  
@@ -22,6 +22,7 @@ def config():
         "models/algorithms/cfr_plus.pkl",
         "models/algorithms/dcfr.pkl",
         "models/algorithms/linear_cfr.pkl",
+        "models/algorithms/dcfr_plus.pkl",
     ] 
     check_program = True
     programs_max_length = [8, 16, 6]

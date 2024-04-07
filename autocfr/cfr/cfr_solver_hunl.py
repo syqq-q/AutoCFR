@@ -1,42 +1,25 @@
-# Copyright (c) 2019 Eric Steinberger
-
-
-import copy
-
+import attr
 import numpy as np
-
+from autocfr.program.program_types import nptype
+import copy
 from PokerRL.game._.tree.PublicTree import PublicTree, PublicTreeHUNL
 from PokerRL.game.wrappers import HistoryEnvBuilder
 from PokerRL.rl.rl_util import get_env_cls_from_str
 from PokerRL.game.games import DiscretizedNLHoldemSubGame
+# from scripts.load_best_algorithm import load_best_algorithm
+from autocfr.cfr.cfr_algorithm import load_algorithm
 
-class CFRBase:
-    """
-    base class to all full-width (i.e. non MC) tabular CFR methods
-    """
 
-    def __init__(self,
+class CFRHunlSolver:
+    def __init__(self, 
                  name,
                  chief_handle,
                  game_cls,
                  agent_bet_set,
-                 algo_name,
+                 algorithm,
                  other_agent_bet_set=None,
-                 starting_stack_sizes=None,
+                 starting_stack_sizes=None
                  ):
-        """
-        Args:
-            name (str):                             Under this name all logs, data, and checkpoints will appear.
-            chief_handle (ChiefBase):               Reference to chief worker
-            game_cls (PokerEnv subclass):           Class (not instance) to be trained in.
-            agent_bet_set (iterable):               Choosing a bet-set from bet_sets.py is recommended. If solving a
-                                                    Limit poker game, this value will not be considered, but must still
-                                                    be passed. Just set this to any list of floats (e.g. [0.0])
-            starting_stack_sizes (list of ints):    For each stack size in this list, a CFR strategy will be computed.
-                                                    Results are logged individually and averaged (uniform).
-                                                    If None, takes the default for the game.
-        """
-
         self._name = name
         self._n_seats = 2
 
@@ -71,11 +54,16 @@ class CFRBase:
 
             for s in range(len(self._starting_stack_sizes))
         ]
+        
+        # self.game = game
+        self.algorithm = algorithm
+        # self.algorithm_of_round4 = load_best_algorithm(31)[1]
+        self.algorithm_of_round4 = load_algorithm("dcfr_plus")
+        self.iter_count = None
         if issubclass(game_cls, DiscretizedNLHoldemSubGame):
             self.tree_cls = PublicTreeHUNL
         else:
             self.tree_cls = PublicTree
-
         self._trees = [
             self.tree_cls(env_bldr=self._env_bldrs[idx],
                        stack_size=self._env_args[idx].starting_stack_sizes_list,
@@ -87,78 +75,125 @@ class CFRBase:
             tree.build_tree()
             print("Tree with stack size", tree.stack_size, "has", tree.n_nodes, "nodes out of which", tree.n_nonterm,
                   "are non-terminal.")
-        self._algo_name = algo_name
-
+        
         self._exps_curr_total = [
             self._chief_handle.create_experiment(
-                self._name + "_Curr_S" + str(self._starting_stack_sizes[s]) + "_total_" + self._algo_name)
+                self._name + "_Curr_S" + str(self._starting_stack_sizes[s]) + "_total_" + type(self.algorithm).__name__)
             for s in range(len(self._starting_stack_sizes))
         ]
 
         self._exps_avg_total = [
             self._chief_handle.create_experiment(
-                self._name + "_Avg_total_S" + str(self._starting_stack_sizes[s]) + "_" + self._algo_name)
+                self._name + "_Avg_total_S" + str(self._starting_stack_sizes[s]) + "_" + type(self.algorithm).__name__)
             for s in range(len(self._starting_stack_sizes))
         ]
 
         self._exp_all_averaged_curr_total = self._chief_handle.create_experiment(
-            self._name + "_Curr_total_averaged_" + self._algo_name)
+            self._name + "_Curr_total_averaged_" + type(self.algorithm).__name__)
 
         self._exp_all_averaged_avg_total = self._chief_handle.create_experiment(
-            self._name + "_Avg_total_averaged_" + self._algo_name)
-
-        self._iter_counter = None
-
-    @property
-    def name(self):
-        return self._name
-
-    @property
-    def algo_name(self):
-        return self._algo_name
-
-    @property
-    def iter_counter(self):
-        return self._iter_counter
+            self._name + "_Avg_total_averaged_" + type(self.algorithm).__name__)
+        self.reset()
 
     def reset(self):
-        self._iter_counter = 0
+        self.iter_count = 0
         for p in range(self._n_seats):
             self._reset_player(p_id=p)
         for t_idx in range(len(self._trees)):
             self._trees[t_idx].fill_uniform_random()
 
         self._compute_cfv()
-        self._log_curr_strat_expl()
+        # self._log_curr_strat_expl()
+    
+    def _reset_player(self, p_id):
+        def __reset(_node, _p_id):
+            if _node.p_id_acting_next == _p_id:
+                # regrets and strategies only need to be stored for one player at each node
+                _node.data = {
+                    "regret": None,
+                    "avg_strat": None
+                }
+                _node.strategy = None
+                _node.avg_strat_sum = None
 
+            for c in _node.children:
+                __reset(c, _p_id=_p_id)
+
+        for t_idx in range(len(self._trees)):
+            __reset(self._trees[t_idx].root, _p_id=p_id)
+    
     def iteration(self):
-        
-        for p in range(self._n_seats):
+        self.iter_count += 1
+        print("iteration:", self.iter_count)
+        for i in range(self._n_seats):
             self._compute_cfv()
-            print("11111111")
-            self._compute_regrets(p_id=p)
-            self._add_strategy_to_average(p_id=p) #????
-            self._compute_new_strategy(p_id=p)
+            self._compute_regrets(p_id=i)
+            self._update_trees(current_player=i)
             self._update_reach_probs()
 
-        self._iter_counter += 1
+        self._compute_cfv()
+        self._evaluate_avg_strats()
+    
+    def _update_trees(self, current_player):
+        for t_idx in range(len(self._trees)):
+            def get_average_strategy(cumu_strategy):
+                vec = cumu_strategy
+                size = vec.shape
+                N = size[1]
+                p_sum = np.expand_dims(np.sum(vec, axis=1), axis=1).repeat(N, axis=1)
+                with np.errstate(divide='ignore', invalid='ignore'):
+                    res = np.where(
+                        p_sum > 0.0,
+                        vec / p_sum,
+                        np.full(shape=size, fill_value=1.0/N, dtype=np.float32)
+                    )
+                return res
+            def execute_program(_node, current_player, algorithm):
+                input_values_of_names = {
+                    "ins_regret": nptype(_node.ins_regret),
+                    "reach_prob": nptype(np.expand_dims(_node.reach_probs[current_player], axis=1)),#结构不一样
+                    "iters": nptype(self.iter_count),
+                    "cumu_regret": nptype(_node.data["regret"]),
+                    "strategy": nptype(_node.strategy),
+                    "cumu_strategy": nptype(_node.avg_strat_sum),
+                }
+                
+                #print("ins_regret:", nptype(_node.ins_regret))
+                #print("\ncumu_strategy:", nptype(_node.avg_strat_sum))
 
-        self._compute_cfv() #???为什么再算一遍
-        self._log_curr_strat_expl()
-        self._evaluate_avg_strats() #均衡计算（可利用度）
+                output_values_of_names = self.algorithm.execute(input_values_of_names)
+                _node.ins_regret *= 0
+                #_node.reach_probs[current_player].fill(0)
+                _node.data["regret"] = output_values_of_names["cumu_regret"]
+                _node.strategy = output_values_of_names["strategy"]
+                _node.avg_strat_sum = output_values_of_names["cumu_strategy"]
+                _node.data["avg_strat"] = get_average_strategy(_node.avg_strat_sum)
+
+                #print("\nreach_prob:", nptype(_node.reach_probs[current_player]))
+                #print("\niters:", nptype(self.iter_count))
+                #print("\ncumu_regret:", nptype(_node.data["regret"]))
+                #print("\nstrategy:", nptype(_node.strategy))
+                #print("\ncumu_strategy:", nptype(_node.data["avg_strat_sum"]))
+            def _update(_node, current_player):
+                if _node.p_id_acting_next == current_player:
+                    #判断当前轮次，决定用什么算法更新，传一个algorithm参数
+                    # print("current_round:", _node.current_round)
+                    if _node.current_round == 2:
+                        algo = self.algorithm
+                    elif _node.current_round == 3:
+                        algo = self.algorithm_of_round4
+                    execute_program(_node=_node, current_player=current_player, algorithm=algo)
+                for c in _node.children:
+                    _update(_node=c, current_player=current_player)
+            
+            _node = self._trees[t_idx].root
+            _update(_node=_node, current_player=current_player)
 
     def _compute_cfv(self):
         for t_idx in range(len(self._trees)):
             self._trees[t_idx].compute_ev()
 
-    def _regret_formula_first_it(self, ev_all_actions, strat_ev):
-        raise NotImplementedError
-
-    def _regret_formula_after_first_it(self, ev_all_actions, strat_ev, last_regrets):
-        raise NotImplementedError
-
     def _compute_regrets(self, p_id):
-
         for t_idx in range(len(self._trees)):
             def __compute_evs(_node):
                 # EV of each action
@@ -171,66 +206,16 @@ class CFRBase:
                 strat_ev = _node.ev[p_id]
                 strat_ev = np.expand_dims(strat_ev, axis=-1).repeat(N_ACTIONS, axis=-1)
 
-                return strat_ev, ev_all_actions
-
-            def _fill_after_first(_node):
+                return strat_ev, ev_all_actions      
+            def _fill_regrets(_node):
                 if _node.p_id_acting_next == p_id:
                     strat_ev, ev_all_actions = __compute_evs(_node=_node)
-                    _node.data["regret"] = self._regret_formula_after_first_it(ev_all_actions=ev_all_actions,
-                                                                               strat_ev=strat_ev,
-                                                                               last_regrets=_node.data["regret"])
-                    #print("\ncumu_regret:", _node.data["regret"])
-
+                    if self.iter_count == 1:
+                        _node.data["regret"] = np.zeros_like(ev_all_actions)
+                    _node.ins_regret = ev_all_actions - strat_ev
                 for c in _node.children:
-                    _fill_after_first(c)
-
-            def _fill_first(_node):
-                if _node.p_id_acting_next == p_id:
-                    strat_ev, ev_all_actions = __compute_evs(_node=_node)
-
-                    _node.data["regret"] = self._regret_formula_first_it(ev_all_actions=ev_all_actions,
-                                                                         strat_ev=strat_ev)
-                    #print("\ncumu_regret:", _node.data["regret"])
-
-                for c in _node.children:
-                    _fill_first(c)
-
-            if self._iter_counter == 0:
-                _fill_first(self._trees[t_idx].root) #init_states？
-            else:
-                _fill_after_first(self._trees[t_idx].root)
-
-    def _compute_new_strategy(self, p_id):
-        """ Assumes regrets have been computed for player ""p_id"" already! """
-        raise NotImplementedError
-
-    def _update_reach_probs(self):
-        for t_idx in range(len(self._trees)):
-            self._trees[t_idx].update_reach_probs()
-
-    def _add_strategy_to_average(self, p_id):
-        raise NotImplementedError
-
-    def _log_curr_strat_expl(self):
-        expl_totals = []
-        for t_idx in range(len(self._trees)):
-            METRIC = self._env_bldrs[t_idx].env_cls.WIN_METRIC
-            expl_p = [
-                float(self._trees[t_idx].root.exploitability[p]) * self._env_bldrs[t_idx].env_cls.EV_NORMALIZER
-                for p in range(self._n_seats)
-            ]
-            expl_total = sum(expl_p) / self._n_seats
-            expl_totals.append(expl_total)
-
-            self._chief_handle.add_scalar(self._exps_curr_total[t_idx],
-                                          "Evaluation/" + METRIC, self._iter_counter, expl_total)
-
-            self._trees[t_idx].export_to_file(name=self._name + "_Curr_" + str(self._iter_counter))
-
-        expl_total_averaged = sum(expl_totals) / float(len(expl_totals))
-        self.expl = expl_total_averaged
-        self._chief_handle.add_scalar(self._exp_all_averaged_curr_total,
-                                      "Evaluation/" + METRIC, self._iter_counter, expl_total_averaged)
+                    _fill_regrets(c)
+            _fill_regrets(self._trees[t_idx].root)          
 
     def _evaluate_avg_strats(self):
         expl_totals = []
@@ -246,8 +231,8 @@ class CFRBase:
             def _fill(_node_eval, _node_train):
                 if _node_eval.p_id_acting_next != eval_tree.CHANCE_ID and (not _node_eval.is_terminal):
                     _node_eval.strategy = np.copy(_node_train.data["avg_strat"])
-                    print("\n_node_eval.strategy:", _node_eval.strategy)
-                    print("\nsum of strategy:", np.sum(_node_eval.strategy, axis=1))
+                    #print("\n_node_eval.strategy:", _node_eval.strategy)
+                    #print("\nsum of strategy:", np.sum(_node_eval.strategy, axis=1))
                     assert np.allclose(np.sum(_node_eval.strategy, axis=1), 1, atol=0.0001)
 
                 for c_eval, c_train in zip(_node_eval.children, _node_train.children):
@@ -263,7 +248,7 @@ class CFRBase:
             # compute EVs
             eval_tree.compute_ev()
 
-            eval_tree.export_to_file(name=self._name + "_Avg_" + str(self._iter_counter))
+            eval_tree.export_to_file(name=self._name + "_Avg_" + str(self.iter_count))
 
             # log
             expl_p = [
@@ -274,26 +259,23 @@ class CFRBase:
             expl_totals.append(expl_total)
 
             self._chief_handle.add_scalar(self._exps_avg_total[t_idx],
-                                          "Evaluation/" + METRIC, self._iter_counter, expl_total)
+                                          "Evaluation/" + METRIC, self.iter_count, expl_total)
 
         expl_total_averaged = sum(expl_totals) / float(len(expl_totals))
         self.expl = expl_total_averaged
         self._chief_handle.add_scalar(self._exp_all_averaged_avg_total,
-                                      "Evaluation/" + METRIC, self._iter_counter, expl_total_averaged)
+                                      "Evaluation/" + METRIC, self.iter_count, expl_total_averaged)
 
-    def _reset_player(self, p_id):
-        def __reset(_node, _p_id):
-            if _node.p_id_acting_next == _p_id:
-                # regrets and strategies only need to be stored for one player at each node
-                _node.data = {
-                    "regret": None,
-                    "avg_strat": None,
-                    "avg_strat_sum": None
-                }
-                _node.strategy = None
-
-            for c in _node.children:
-                __reset(c, _p_id=_p_id)
-
+    def _update_reach_probs(self):
         for t_idx in range(len(self._trees)):
-            __reset(self._trees[t_idx].root, _p_id=p_id)
+            self._trees[t_idx].update_reach_probs()
+
+    def average_policy(self):
+        def wrap(h):
+            feature = h.information_state_string()
+            s = self.states[feature]
+            average_policy = {}
+            for index, a in enumerate(h.legal_actions()):
+                average_policy[a] = s.average_strategy[index]
+            return average_policy
+        return wrap

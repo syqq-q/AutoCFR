@@ -28,6 +28,7 @@ def _execute_program(
     intermediate_values = {**input_values, **data_structure_values}
     output_values = []
 
+    #print("program_operations:", program_operations, "\n")
     for operation in program_operations:
         input_values = [intermediate_values[i] for i in operation.inputs]
         output_value = "UNSET"
@@ -43,7 +44,7 @@ def _execute_program(
                 output_value,
             ]
             raise ProgramExecutionError(e)
-
+    #print("length of output_values:", len(output_values), "\n")
     for operation, output_value in zip(program_operations, output_values):
         try:
             assert operation.cached_output_type.value_class == type(output_value), (
@@ -53,6 +54,8 @@ def _execute_program(
                 type(output_value),
                 operation,
             )
+            #print("----------\n")
+            #print("output_value:", output_value)
             assert operation.cached_output_type.is_valid_value(output_value)
         except Exception as e:
             e.info = [

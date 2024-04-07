@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 from PIL import Image
+from PokerRL.game.games import DiscretizedNLHoldemSubGame3, DiscretizedNLHoldemSubGame4
 
 
 class Timer:
@@ -63,9 +64,11 @@ def update_game_configs_by_configs(game_configs, configs):
         game_config
         for game_config in game_configs
         if game_config["long_name"] in configs.keys()
+        # if game_config["subgame_name"] in configs.keys()
     ]
     for game_config in game_configs:
         config = configs[game_config["long_name"]]
+        # config = configs[game_config["subgame_name"]]
         if "max_score" in config:
             game_config["max_score"] = config["max_score"]
         if "weight" in config:
@@ -76,101 +79,143 @@ def update_game_configs_by_configs(game_configs, configs):
 
 def load_game_configs(mode="full"):
     game_configs = [
-        {
-            "long_name": "NFG-1",
-            "game_name": "nfg_game",
-            "params": {"filename": "nfg/NFG-1.nfg"},
-            "transform": True
-        },
-        {
-            "long_name": "NFG-2",
-            "game_name": "nfg_game",
-            "params": {"filename": "nfg/NFG-2.nfg"},
-            "transform": True
-        },
-        {
-            "long_name": "NFG-3",
-            "game_name": "nfg_game",
-            "params": {"filename": "nfg/NFG-3.nfg"},
-            "transform": True
-        },
-        {
-            "long_name": "NFG-4",
-            "game_name": "nfg_game",
-            "params": {"filename": "nfg/NFG-4.nfg"},
-            "transform": True
-        },
+        # {
+        #     "subgame_name": "subgame1",
+        #     "subgame1": DiscretizedNLHoldemSubGame1
+        # },
+        # {
+        #     "subgame_name": "subgame2",
+        #     "subgame2": DiscretizedNLHoldemSubGame2
+        # },
+        # {
+        #     "subgame_name": "subgame3",
+        #     "subgame3": DiscretizedNLHoldemSubGame3
+        # },
+        # {
+        #     "subgame_name": "subgame4",
+        #     "subgame4": DiscretizedNLHoldemSubGame4
+        # }
+        # {
+        #     "long_name": "NFG-1",
+        #     "game_name": "nfg_game",
+        #     "params": {"filename": "nfg/NFG-1.nfg"},
+        #     "transform": True
+        # },
+        # {
+        #     "long_name": "NFG-2",
+        #     "game_name": "nfg_game",
+        #     "params": {"filename": "nfg/NFG-2.nfg"},
+        #     "transform": True
+        # },
+        # {
+        #     "long_name": "NFG-3",
+        #     "game_name": "nfg_game",
+        #     "params": {"filename": "nfg/NFG-3.nfg"},
+        #     "transform": True
+        # },
+        # {
+        #     "long_name": "NFG-4",
+        #     "game_name": "nfg_game",
+        #     "params": {"filename": "nfg/NFG-4.nfg"},
+        #     "transform": True
+        # },
         {
             "long_name": "kuhn_poker",
             "game_name": "kuhn_poker",
             "params": {"players": 2},
-        },
-        {
-            "long_name": "liars_dice_1n_3s",
-            "game_name": "liars_dice",
-            "params": {"numdice": 1, "dice_sides": 3},
-        },
-        {
-            "long_name": "liars_dice_1n_4s",
-            "game_name": "liars_dice",
-            "params": {"numdice": 1, "dice_sides": 4},
+            "game_index": 0
         },
         {
             "long_name": "leduc_poker",
             "game_name": "leduc_poker",
             "params": {"players": 2},
+            "game_index": 1
         },
-        {
-            "long_name": "goofspiel_3",
-            "game_name": "goofspiel",
-            "params": {"num_cards": 3, "imp_info": True, "points_order": "descending"},
-            "transform": True,
-        },
-        {
-            "long_name": "goofspiel_4",
-            "game_name": "goofspiel",
-            "params": {"num_cards": 4, "imp_info": True, "points_order": "descending"},
-            "transform": True,
-        }
+        # {
+        #     "long_name": "liars_dice_1n_3s",
+        #     "game_name": "liars_dice",
+        #     "params": {"numdice": 1, "dice_sides": 3},
+        #     "game_index": 0
+        # },
+        # {
+        #     "long_name": "liars_dice_1n_4s",
+        #     "game_name": "liars_dice",
+        #     "params": {"numdice": 1, "dice_sides": 4},
+        #     "game_index": 1
+        # },
+        # {
+        #     "long_name": "goofspiel_3",
+        #     "game_name": "goofspiel",
+        #     "params": {"num_cards": 3, "imp_info": True, "points_order": "descending"},
+        #     "transform": True,
+        #     "game_index": 3
+        # },
+        # {
+        #     "long_name": "goofspiel_4",
+        #     "game_name": "goofspiel",
+        #     "params": {"num_cards": 4, "imp_info": True, "points_order": "descending"},
+        #     "transform": True,
+        #     "game_index": 4
+        # }
     ]
     if mode == "train":
         configs = {
-            "NFG-1": dict(max_score=1.1, weight=1, iterations=1000),
-            "NFG-2": dict(max_score=1.1, weight=1, iterations=1000),
-            "NFG-3": dict(max_score=1.1, weight=1, iterations=1000),
-            "NFG-4": dict(max_score=1.1, weight=1, iterations=1000),
-            "kuhn_poker": dict(max_score=1.2, weight=3, iterations=1000),
-            "goofspiel_3": dict(max_score=1.1, weight=1, iterations=1000),
-            "liars_dice_1n_3s": dict(max_score=1.1, weight=1, iterations=1000),
-            "liars_dice_1n_4s": dict(max_score=1.2, weight=5, iterations=100),
+            # "NFG-1": dict(max_score=1.1, weight=1, iterations=1000),
+            # "NFG-2": dict(max_score=1.1, weight=1, iterations=1000),
+            # "NFG-3": dict(max_score=1.1, weight=1, iterations=1000),
+            # "NFG-4": dict(max_score=1.1, weight=1, iterations=1000),
+            "kuhn_poker": dict(max_score=1.2, iterations=1000),
+            "leduc_poker": dict(max_score=1.2, iterations=1000),
+            "goofspiel_3": dict(max_score=1.1, iterations=1000),
+            "liars_dice_1n_3s": dict(max_score=1.1, iterations=1000),
+            "liars_dice_1n_4s": dict(max_score=1.2, iterations=100),
+            "goofspiel_4": dict(max_score=1.1, iterations=1000),
+            # "goofspiel_3": dict(max_score=1.1, weight=1, iterations=1000)
+            # "subgame1": dict(max_score=1.1, weight=1, iterations=1000),
+            # "subgame2": dict(max_score=1.1, weight=1, iterations=1000),
+            # "subgame3": dict(max_score=1.1, weight=1, iterations=1000),
+            # "subgame4": dict(max_score=1.3, weight=1, iterations=1000),
         }
         game_configs = update_game_configs_by_configs(game_configs, configs)
-    elif mode == "ablation_study_train":
+    elif mode == "ablation_study_train": 
         configs = {
-            "kuhn_poker": dict(max_score=1.2, weight=3, iterations=1000),
-            "goofspiel_3": dict(max_score=1.1, weight=1, iterations=1000),
-            "liars_dice_1n_3s": dict(max_score=1.1, weight=1, iterations=1000),
-            "liars_dice_1n_4s": dict(max_score=1.2, weight=5, iterations=100),
+            # "kuhn_poker": dict(max_score=1.2, weight=3, iterations=1000),
+            # "goofspiel_3": dict(max_score=1.1, weight=1, iterations=1000),
+            # "liars_dice_1n_3s": dict(max_score=1.1, weight=1, iterations=1000),
+            # "liars_dice_1n_4s": dict(max_score=1.2, weight=5, iterations=100),
+            # "subgame1": dict(max_score=1.1, weight=1, iterations=1000),
+            # "subgame2": dict(max_score=1.1, weight=1, iterations=1000),
+            # "subgame3": dict(max_score=1.1, weight=1, iterations=1000),
+            # "subgame4": dict(max_score=1.3, weight=1, iterations=1000),
         }
         game_configs = update_game_configs_by_configs(game_configs, configs)
     elif mode == "test":
         configs = {
-            "goofspiel_4": dict(iterations=20000),
-            "leduc_poker": dict(iterations=20000),
+            # "kuhn_poker": dict(iterations=1000),
+            # "goofspiel_4": dict(iterations=20000),
+            "leduc_poker": dict(iterations=10000),
+            # "subgame1": dict(iterations=20000),
+            # "subgame2": dict(iterations=20000),
+            # "subgame3": dict(iterations=20000),
+            # "subgame4": dict(iterations=20000),
         }
         game_configs = update_game_configs_by_configs(game_configs, configs)
     elif mode == "full":
         configs = {
-            "NFG-1": dict(iterations=1000),
-            "NFG-2": dict(iterations=1000),
-            "NFG-3": dict(iterations=1000),
-            "NFG-4": dict(iterations=1000),
-            "kuhn_poker": dict(iterations=1000),
-            "goofspiel_3": dict(iterations=1000),
-            "liars_dice_1n_3s": dict(iterations=1000),
-            "liars_dice_1n_4s": dict(iterations=100),
-            "goofspiel_4": dict(iterations=20000),
-            "leduc_poker": dict(iterations=20000),
+            # "NFG-1": dict(iterations=1000),
+            # "NFG-2": dict(iterations=1000),
+            # "NFG-3": dict(iterations=1000),
+            # "NFG-4": dict(iterations=1000),
+            # "kuhn_poker": dict(iterations=1000),
+            # "goofspiel_3": dict(iterations=1000),
+            # "liars_dice_1n_3s": dict(iterations=1000),
+            # "liars_dice_1n_4s": dict(iterations=100),
+            # "goofspiel_4": dict(iterations=20000),
+            # "leduc_poker": dict(iterations=20000),
+            # "subgame1": dict(iterations=20000),
+            # "subgame2": dict(iterations=20000),
+            # "subgame3": dict(iterations=20000),
+            # "subgame4": dict(iterations=20000),
         }
         game_configs = update_game_configs_by_configs(game_configs, configs)
     else:

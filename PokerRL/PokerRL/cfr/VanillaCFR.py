@@ -55,6 +55,7 @@ class VanillaCFR(_CFRBase):
     def _add_strategy_to_average(self, p_id):
         def _fill(_node):
             if _node.p_id_acting_next == p_id:
+                print("\nreach_probs:", _node.reach_probs[p_id])
                 contrib = _node.strategy * np.expand_dims(_node.reach_probs[p_id], axis=1)
                 if self._iter_counter > 0:
                     _node.data["avg_strat_sum"] += contrib

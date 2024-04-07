@@ -16,6 +16,7 @@ class NodeBase:
         """
         self.env_state = env_state
         self.parent = parent
+        #1
         self.p_id_acting_next = self.env_state[EnvDictIdxs.current_player]
         self.p_id_acted_last = p_id_acted_last
 
@@ -23,12 +24,16 @@ class NodeBase:
         self.depth = depth
         self.tree = tree
 
-        # built in recursion
+        # built in recursion（现在不能确定，到了才知道）
+        #3
         self.allowed_actions = []
         self.children = []
 
+        #7
         self.strategy = None  # p_id_acting_next' strategy: np.arr((range_size, n_actions), np.float32)
+        #4
         self.reach_probs = None  # reach probs of all players: np.arr((n_seats, range_size), np.float32)
+        self.avg_strat_sum = None
         self.ev = None  # EVs for all players: np.arr((n_seats, range_size), np.float32)
         self.ev_br = None  # EV vs BR:  np.arr((n_seats, range_size), np.float32)
         self.ev_weighted = None
@@ -39,6 +44,8 @@ class NodeBase:
 
         # Any algorithm using a PublicTree to run on (e.g. CFR, CFR+) can use this to hold a dict of vals
         self.data = None
+        self.ins_regret = None
+        
 
 
 class PlayerActionNode(NodeBase):

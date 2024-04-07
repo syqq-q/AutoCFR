@@ -16,6 +16,7 @@ class CppWrapper:
 
     def __init__(self, path_to_dll):
         self._clib = ctypes.cdll.LoadLibrary(path_to_dll)
+        print("path_to_dll:", path_to_dll)
 
     @staticmethod
     def np_1d_arr_to_c(np_arr):
